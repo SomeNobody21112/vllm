@@ -8,6 +8,7 @@ module, from-import copies, and JIT warmup owners) so that existing call
 sites dispatch to the override without any core-side decoration.
 """
 
+import inspect
 import sys
 import types
 from typing import Any
@@ -20,6 +21,8 @@ from vllm.model_executor.warmup.jit_warmup_triton_helper import (
 from vllm.triton_utils import tl, triton
 from vllm.triton_utils.dispatcher import (
     KernelOverride,
+    _kernel_arg_names,
+    _resolve_kernel,
     register_kernels,
 )
 
@@ -219,4 +222,35 @@ def test_real_triton_kernel_override_end_to_end() -> None:
         "x_ptr",
         "out_ptr",
         "BLOCK",
+    )
+
+
+def _cpu_kernel_overrides() -> list[Any]:
+    from vllm.platforms.cpu import CpuPlatform
+
+    overrides = CpuPlatform.triton_kernel_overrides()
+    return [pytest.param(name, impl, id=name) for name, impl in overrides.items()]
+
+
+@pytest.mark.parametrize("kernel_name,impl", _cpu_kernel_overrides())
+def test_cpu_override_takes_kernel_arguments_in_order(
+    kernel_name: str, impl: Any
+) -> None:
+    """Launches are forwarded positionally, so a fallback that does not follow
+    a kernel signature change silently receives misbound arguments."""
+    host, attr = _resolve_kernel(kernel_name)
+    kernel_args = _kernel_arg_names(getattr(host, attr))
+    params = list(inspect.signature(impl).parameters.values())
+
+    impl_args = tuple(p.name for p in params[: len(kernel_args)])
+    expected = tuple(
+        got if got == want.removesuffix("_ptr") else want
+        for want, got in zip(kernel_args, impl_args)
+    )
+    assert impl_args == expected and len(impl_args) == len(kernel_args), (
+        f"{impl.__name__} is out of sync with {kernel_name}{kernel_args}"
+    )
+    extra = params[len(kernel_args) :]
+    assert all(p.default is not inspect.Parameter.empty for p in extra), (
+        f"{impl.__name__} requires arguments {kernel_name} does not launch with"
     )

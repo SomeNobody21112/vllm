@@ -6,7 +6,8 @@ import os
 import platform
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -680,45 +681,49 @@ class CpuPlatform(Platform):
             return
 
         from vllm.triton_utils.dispatcher import register_kernels
+
+        register_kernels(cls.triton_kernel_overrides())
+
+    @classmethod
+    def triton_kernel_overrides(cls) -> dict[str, Callable[..., Any]]:
+        """Map each overridden Triton kernel to its C++ fallback adapter."""
         from vllm.utils import cpu_triton_utils as cpu_tl
 
-        register_kernels(
-            {
-                "vllm.v1.worker.block_table.ComputeSlotMappingKernel.kernel": (
-                    cpu_tl._compute_slot_mapping_kernel_impl
-                ),
-                "vllm.v1.spec_decode.utils.eagle_step_slot_mapping_metadata_kernel": (
-                    cpu_tl._eagle_step_slot_mapping_metadata_kernel_impl
-                ),
-                "vllm.v1.spec_decode.utils.eagle_prepare_inputs_padded_kernel": (
-                    cpu_tl._eagle_prepare_inputs_padded_kernel_impl
-                ),
-                "vllm.v1.spec_decode.utils.eagle_prepare_next_token_padded_kernel": (
-                    cpu_tl._eagle_prepare_next_token_padded_kernel_impl
-                ),
-                "vllm.v1.spec_decode.utils.copy_and_expand_eagle_inputs_kernel": (
-                    cpu_tl._copy_and_expand_eagle_inputs_kernel_impl
-                ),
-                "vllm.v1.spec_decode.utils.copy_and_expand_dflash_inputs_kernel": (
-                    cpu_tl._copy_and_expand_dflash_inputs_kernel_impl
-                ),
-                "vllm.v1.sample.rejection_sampler.rejection_greedy_sample_kernel": (
-                    cpu_tl._rejection_greedy_sample_kernel_impl
-                ),
-                "vllm.v1.sample.rejection_sampler.rejection_random_sample_kernel": (
-                    cpu_tl._rejection_random_sample_kernel_impl
-                ),
-                "vllm.v1.sample.rejection_sampler.expand_kernel": (
-                    cpu_tl._expand_kernel_impl
-                ),
-                "vllm.v1.sample.rejection_sampler.sample_recovered_tokens_kernel": (
-                    cpu_tl._sample_recovered_tokens_kernel_impl
-                ),
-                "vllm.v1.worker.mamba_utils.batch_memcpy_kernel": (
-                    cpu_tl._batch_memcpy_impl
-                ),
-            }
-        )
+        return {
+            "vllm.v1.worker.block_table.ComputeSlotMappingKernel.kernel": (
+                cpu_tl._compute_slot_mapping_kernel_impl
+            ),
+            "vllm.v1.spec_decode.utils.eagle_step_slot_mapping_metadata_kernel": (
+                cpu_tl._eagle_step_slot_mapping_metadata_kernel_impl
+            ),
+            "vllm.v1.spec_decode.utils.eagle_prepare_inputs_padded_kernel": (
+                cpu_tl._eagle_prepare_inputs_padded_kernel_impl
+            ),
+            "vllm.v1.spec_decode.utils.eagle_prepare_next_token_padded_kernel": (
+                cpu_tl._eagle_prepare_next_token_padded_kernel_impl
+            ),
+            "vllm.v1.spec_decode.utils.copy_and_expand_eagle_inputs_kernel": (
+                cpu_tl._copy_and_expand_eagle_inputs_kernel_impl
+            ),
+            "vllm.v1.spec_decode.utils.copy_and_expand_dflash_inputs_kernel": (
+                cpu_tl._copy_and_expand_dflash_inputs_kernel_impl
+            ),
+            "vllm.v1.sample.rejection_sampler.rejection_greedy_sample_kernel": (
+                cpu_tl._rejection_greedy_sample_kernel_impl
+            ),
+            "vllm.v1.sample.rejection_sampler.rejection_random_sample_kernel": (
+                cpu_tl._rejection_random_sample_kernel_impl
+            ),
+            "vllm.v1.sample.rejection_sampler.expand_kernel": (
+                cpu_tl._expand_kernel_impl
+            ),
+            "vllm.v1.sample.rejection_sampler.sample_recovered_tokens_kernel": (
+                cpu_tl._sample_recovered_tokens_kernel_impl
+            ),
+            "vllm.v1.worker.mamba_utils.batch_memcpy_kernel": (
+                cpu_tl._batch_memcpy_impl
+            ),
+        }
 
     @classmethod
     def pack_kv_cache(
